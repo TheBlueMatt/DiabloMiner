@@ -75,7 +75,6 @@ class DiabloMiner {
   int forceWorkSize = 64;
   boolean debug = false;
   int getworkRefresh = 5000;
-  int zloops = 0;
 
   String source;
 
@@ -122,7 +121,6 @@ class DiabloMiner {
     options.addOption("D", "devices", true, "devices to enable");
     options.addOption("x", "proxy", true, "optional proxy settings IP:PORT<:username:password>");
     options.addOption("l", "url", true, "bitcoin host url");
-    options.addOption("z", "loops", true, "kernel loops (power of two, 0 is off)");
     options.addOption("d", "debug", false, "enable extra debug output");
     options.addOption("h", "help", false, "this help");
 
@@ -172,9 +170,6 @@ class DiabloMiner {
 
     if(line.hasOption("port"))
       port = line.getOptionValue("port");
-
-    if(line.hasOption("loops"))
-      zloops = (int) Math.pow(2, Integer.parseInt(line.getOptionValue("loops")));
 
     if(line.hasOption("devices")){
       String devices[] = line.getOptionValue("devices").split(",");
@@ -354,7 +349,6 @@ class DiabloMiner {
 
     long workSize;
     long workSizeBase;
-
     final PointerBuffer localWorkSize = BufferUtils.createPointerBuffer(1);
 
     final ExecutionState executions[] = new ExecutionState[EXECUTION_TOTAL];;
@@ -392,20 +386,13 @@ class DiabloMiner {
         loops = LOOPS;
       }
 
-      if(zloops > 1)
-        loops = zloops;
-      else if(zloops == 1)
-        loops = 1;
-
       String compileOptions = "";
 
       if(hasBitAlign)
         compileOptions += " -D BITALIGN";
 
-      if(loops > 1) {
+      if(loops > 1)
         compileOptions += " -D DOLOOPS";
-        compileOptions += " -D LOOPS=" + loops;
-      }
 
       if(forceWorkSize > 0)
         compileOptions += " -D WORKGROUPSIZE=" + forceWorkSize;
@@ -447,7 +434,7 @@ class DiabloMiner {
 
       info("Added " + deviceName + " (" + deviceCU + " CU, local work size of " + localWorkSize.get(0) + ")");
 
-      workSizeBase = (long) (localWorkSize.get(0) * ((float)LOOPS / (float)loops) * deviceCU);
+      workSizeBase = localWorkSize.get(0) * ((LOOPS + 1) - loops);
       workSize = workSizeBase;
 
       for(int i = 0; i < EXECUTION_TOTAL; i++) {

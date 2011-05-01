@@ -74,6 +74,7 @@ class DiabloMiner {
   float targetFPS = 60;
   int forceWorkSize = 64;
   boolean debug = false;
+  boolean extradebug = false;
   int getworkRefresh = 5000;
 
   String source;
@@ -90,6 +91,7 @@ class DiabloMiner {
 
   AtomicLong currentBlocks = new AtomicLong(0);
   AtomicLong currentAttempts = new AtomicLong(0);
+  AtomicLong currentRejects = new AtomicLong(0);
   Set<String> enabledDevices = null;
 
   final static int EXECUTION_TOTAL = 3;
@@ -121,7 +123,9 @@ class DiabloMiner {
     options.addOption("D", "devices", true, "devices to enable");
     options.addOption("x", "proxy", true, "optional proxy settings IP:PORT<:username:password>");
     options.addOption("l", "url", true, "bitcoin host url");
-    options.addOption("d", "debug", false, "enable extra debug output");
+    options.addOption("z", "loops", true, "kernel loops (power of two, 0 is off)");
+    options.addOption("d", "debug", false, "enable debug output");
+    options.addOption("dd", "edebug", false, "enable extra debug output");
     options.addOption("h", "help", false, "this help");
 
     PosixParser parser = new PosixParser();
@@ -164,6 +168,9 @@ class DiabloMiner {
 
     if(line.hasOption("debug"))
       debug = true;
+
+    if(line.hasOption("edebug"))
+      extradebug = true;
 
     if(line.hasOption("host"))
       ip = line.getOptionValue("host");
@@ -274,7 +281,14 @@ class DiabloMiner {
 
       if(now - startTime > TIME_OFFSET * 2) {
         long averageHashCount = (adjustedHashCount + previousAdjustedHashCount) / 2;
-        System.out.print("\r" + averageHashCount + "/" + hashLongCount + " khash/sec");
+        if(extradebug) {
+          System.out.print("\r" + averageHashCount + "/" + hashLongCount + " khash/sec | ghash: ");
+
+          for(int i = 0; i < deviceStates.size(); i++)
+            System.out.printf("%.3f ", deviceStates.get(i).deviceHashCount.get() / 1000.0 / 1000.0 / 1000.0);
+        } else {
+          System.out.print("\r" + averageHashCount + "/" + hashLongCount + " khash/sec");
+        }
       } else {
         System.out.print("\rWaiting...");
       }
@@ -352,6 +366,8 @@ class DiabloMiner {
     final PointerBuffer localWorkSize = BufferUtils.createPointerBuffer(1);
 
     final ExecutionState executions[] = new ExecutionState[EXECUTION_TOTAL];;
+
+    AtomicLong deviceHashCount = new AtomicLong(0);
 
     AtomicLong runs = new AtomicLong(0);
     long lastRuns = 0;
@@ -539,9 +555,8 @@ class DiabloMiner {
                 if(H == 0) {
                   if(currentWork.sendWork(nonce)) {
                     info("Block " + currentBlocks.incrementAndGet() + " found on " + deviceName);
-                    debug("Header of " + currentWork.encodeBlock());
                   } else {
-                    debug("Block found, but rejected by Bitcoin, on " + deviceName);
+                    info("Rejected block " + currentRejects.incrementAndGet() + " found on " + deviceName);
                   }
 
                   submittedBlock = true;
@@ -623,6 +638,7 @@ class DiabloMiner {
             }
           } else {
             hashCount.addAndGet(workSizeTemp.get(0) * loops);
+            deviceHashCount.addAndGet(workSizeTemp.get(0) * loops);
             currentWork.base += workSizeTemp.get(0);
             runs.incrementAndGet();
           }
